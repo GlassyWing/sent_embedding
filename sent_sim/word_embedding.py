@@ -1,6 +1,5 @@
 import h5py
 import os
-
 from sent_sim.utils import load_words
 
 

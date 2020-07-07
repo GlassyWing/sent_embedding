@@ -1,3 +1,7 @@
+"""
+This file used to generate word-freq file.
+"""
+
 import argparse
 import logging
 import os
@@ -66,5 +70,5 @@ if __name__ == '__main__':
         counter.update(origin_counter)
 
     with open(args.output, "w", encoding="utf-8") as file:
-        for k, v in counter.items():
+        for k, v in sorted(counter.items(), key=lambda item: item[1]):
             file.write(k + "\t" + str(v) + "\n")

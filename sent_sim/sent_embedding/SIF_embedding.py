@@ -4,8 +4,8 @@ from sklearn.decomposition import TruncatedSVD
 
 from sent_sim.sim_metrics import cos_sim
 from sent_sim.word_embedding import WordEmbedding
-from sent_sim.word_freq import WordFreq
 from .sent_embedding import SentEmbedding
+from ..word_weight import WordWeight
 
 
 def compute_pc(X, npc=1):
@@ -31,21 +31,13 @@ def remove_pc(X, npc=1):
 
 class SIFEmbedding(SentEmbedding, ABC):
 
-    def __init__(self, seg, word_freq: WordFreq, word_embedding: WordEmbedding,
+    def __init__(self, seg, word_weight: WordWeight, word_embedding: WordEmbedding,
                  sim_metric=cos_sim):
         self.seg = seg
-        self.word_freq = word_freq
+        self.word_weight = word_weight
         self.word_embedding = word_embedding
         self.ind2weight = None
         self.sim_metric = sim_metric
-        self._init_ind2weight()
-
-    def _init_ind2weight(self):
-        if self.ind2weight is None:
-            ind2weight = {}
-            for word, ind in self.word_embedding.words:
-                ind2weight[ind] = self.word_freq.word_weight(word)
-            self.ind2weight = ind2weight
 
     def lookup_idx(self, word):
         w = word.lower()
@@ -67,7 +59,7 @@ class SIFEmbedding(SentEmbedding, ABC):
         lengths = [len(seq) for seq in seqs]
         max_len = np.max(lengths)
 
-        x = np.empty(shape=(len(seqs), max_len), dtype=np.float)
+        x = (np.ones(shape=(len(seqs), max_len)) * -1).astype(np.int32)
         x_mask = np.zeros_like(x)
 
         for idx, s in enumerate(seqs):
@@ -85,19 +77,24 @@ class SIFEmbedding(SentEmbedding, ABC):
         return self._prepare_data(seqs)
 
     def seqs2weight(self, seqs, mask):
-        weight = np.zeros(seqs.shape, dtype=np.float)
-        for i in range(seqs.shape[0]):
-            for j in range(seqs.shape[1]):
-                if mask[i, j] > 0:
-                    weight[i, j] = self.ind2weight[seqs[i, j]]
-        return weight
+
+        return (self.word_weight.weight4ind[seqs.flatten()] * mask.flatten()).reshape(seqs.shape)
 
     def get_weighted_average(self, x, w):
-        emb = w.dot(self.word_embedding.word_emb[x, :]) / np.count_nonzero(w, axis=0)
+        """
+        :param x: shape = (n, l)
+        :param w: shape = (n, l)
+        """
+        n, l = x.shape
+        # (n, l, d)
+        word_emb = self.word_embedding.word_emb[x.flatten(), :].reshape(n, l, -1)
+
+        # (n, d)
+        emb = np.einsum("nl, nld -> nd", w, word_emb) / np.expand_dims(np.count_nonzero(w, axis=1), axis=1)
 
         return emb
 
-    def sentence_embedding(self, sentences):
+    def sent_embedding(self, sentences):
         x, x_mask = self.sentences2idx(sentences)
         w = self.seqs2weight(x, x_mask)
         emb = self.get_weighted_average(x, w)
@@ -110,7 +107,7 @@ class SIFEmbedding(SentEmbedding, ABC):
         else:
             sentences = queries + values
 
-        emb = self.sentence_embedding(sentences)
+        emb = self.sent_embedding(sentences)
         if values is None:
             sim_matrix = self.sim_metric(emb, emb)
         else:

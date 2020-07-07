@@ -48,8 +48,7 @@ class WordFreq:
             return word_weights
         else:
             word_freq = self.word_frequency(words)
-            word_weight = self.weightpara / \
-                          (self.weightpara + word_freq)
+            word_weight = self.weightpara / (self.weightpara + word_freq)
             return word_weight
 
     def word_frequency(self, word, minimum=0.):
@@ -61,8 +60,7 @@ class WordFreq:
         for token in tokens:
             if token not in self.counter:
                 return minimum
-            one_over_result += 1.0 / \
-                               (self.counter.get(token))
+            one_over_result += 1.0 / self.counter.get(token)
 
         freq = 1.0 / one_over_result
         unrounded = max(freq, minimum)
@@ -80,9 +78,11 @@ class WordFreq:
         freq = self.word_frequency(word, minimum=freq_min)
         return round(freq_to_zipf(freq), 2)
 
+
 if __name__ == '__main__':
     import pkuseg
     import time
+
     seg = pkuseg.pkuseg()
     start_time = time.time()
     word_freq = WordFreq(seg, dict_path="../dict/word_freq.txt")
